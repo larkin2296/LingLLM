@@ -1,13 +1,13 @@
-with open("data/common_3000_chars.txt", encoding="utf-8") as f:
-    chars = list(f.read().strip())  # 一次性读取所有字，直接转成字符list
-VOCAB = chars + ["<unk>", "<pad>"]
-word_to_id = {w: i for i, w in enumerate(VOCAB)}
-id_to_word = {i: w for w, i in word_to_id.items()}
+from transformers import GPT2Tokenizer
 
-def tokenize(text):
-    # word转token
-    return [word_to_id.get(c, word_to_id["<unk>"]) for c in text.lower()]
+# 只下载一次即可，之后可指定 cache_dir/local_files_only
+tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
 
-def detokenize(ids):
-    # token转word
-    return ''.join([id_to_word.get(i, "?") for i in ids])
+VOCAB_SIZE = tokenizer.vocab_size
+PAD_TOKEN_ID = tokenizer.pad_token_id if tokenizer.pad_token is not None else 0  # 如果没有pad，可以手动指定
+
+def encode(text):
+    return tokenizer.encode(text, add_special_tokens=False)
+
+def decode(token_ids):
+    return tokenizer.decode(token_ids)
