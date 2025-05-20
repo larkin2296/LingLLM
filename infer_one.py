@@ -2,7 +2,7 @@ import torch
 from model.minigpt import MiniLLM
 from tokenizer import tokenize, detokenize, VOCAB
 
-device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.backends.mps.is_available() else "cpu")
 model = MiniLLM(len(VOCAB), embed_dim=64, max_seq_len=64, num_heads=4, num_layers=2, dropout=0.1).to(device)
 model.load_state_dict(torch.load("weights/minigpt_best.pth", map_location=device))
 model.eval()

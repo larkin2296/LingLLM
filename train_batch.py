@@ -45,7 +45,7 @@ val_loader = DataLoader(
 
 # 定义模型
 # mps是苹果芯片专用加速
-device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 vocab_size = len(VOCAB)  # 词表总长
 embed_dim = cfg.embed_dim        # embedding 的向量维度
 num_heads = cfg.num_heads

@@ -4,13 +4,13 @@ from tokenizer import tokenize, detokenize, VOCAB
 
 # === 1. 模型参数保持和训练时一致 ===
 vocab_size = len(VOCAB)
-embed_dim = 32
-max_seq_len = 32
-num_heads = 2
+embed_dim = 64
+max_seq_len = 64
+num_heads = 4
 
 # === 2. 新建模型并加载训练权重 ===
 model = MiniLLM(vocab_size, embed_dim, max_seq_len, num_heads, num_layers=2)
-model.load_state_dict(torch.load("minigpt.pth"))
+model.load_state_dict(torch.load("weights/minigpt_best.pth"))
 model.eval()
 
 # === 3. 对话循环 ===
