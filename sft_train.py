@@ -18,7 +18,7 @@ parser.add_argument("--max_seq_len", type=int, default=128)
 parser.add_argument("--epochs", type=int, default=70)
 args = parser.parse_args()
 
-cfg.train_jsonl = "data/val/distill_r1_110k_sft.jsonl"
+cfg.train_jsonl = "data/val/train.jsonl"
 cfg.save_path = "weights/sft_minigpt_best.pth"
 cfg.checkpoint_path = "weights/sft_checkpoint.pth"
 cfg.max_seq_len = args.max_seq_len
@@ -75,10 +75,30 @@ def save_checkpoint(model, optimizer, epoch, filepath):
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
     }, filepath)
-    upload_file_to_oss(f"oss/{filepath}", filepath)
+    upload_file_to_oss(filepath, filepath)
 
 def train():
     global best_loss, counter
+    if os.path.exists(cfg.checkpoint_path):
+        print("加载SFT检查点...")
+        checkpoint = torch.load(cfg.checkpoint_path, map_location=device)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        start_epoch = checkpoint['epoch']
+        print(f"恢复训练从第 {start_epoch} 轮开始。")
+    # 2. 没有SFT checkpoint就加载预训练权重
+    elif os.path.exists(cfg.pre_save_path):
+        print("加载预训练权重 weights/minigpt_best.pth ...")
+        state = torch.load("weights/minigpt_best.pth", map_location=device)
+        if isinstance(state, dict) and 'model_state_dict' in state:
+            model.load_state_dict(state['model_state_dict'])
+        else:
+            model.load_state_dict(state)
+        print("加载完毕！")
+        start_epoch = 0
+    else:
+        print("未找到预训练权重，将随机初始化参数！")
+        start_epoch = 0
     if os.path.exists(cfg.checkpoint_path):
         print("加载检查点...")
         checkpoint = torch.load(cfg.checkpoint_path)

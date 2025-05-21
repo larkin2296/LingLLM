@@ -8,6 +8,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from utils.bin_dataset import BinTokenDataset
 from utils.config import Config
 from utils.oss_upload import upload_file_to_oss, download_file_from_oss
+import time
 
 cfg = Config()
 
@@ -55,12 +56,11 @@ def save_checkpoint(model, optimizer, epoch, filepath):
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
     }, filepath)
-    upload_file_to_oss(f"oss/{filepath}", filepath)
 
 # 恢复训练
 def load_checkpoint(model, optimizer, filepath):
     if not os.path.exists(filepath):
-        download_file_from_oss(f"oss/{filepath}", filepath)
+        download_file_from_oss(filepath, filepath)
     checkpoint = torch.load(filepath)
     model.load_state_dict(checkpoint['model_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -76,33 +76,60 @@ def calc_accuracy(pred_logits, targets):
     return correct.sum().item() / valid_count
 
 def train():
-    global best_val_loss, counter  # 必须加global，否则会UnboundLocalError
+    global best_val_loss, counter
+    # 设定你的目标
+    TARGET_LOSS = 0.05    # 你希望train_loss小于0.05就停止
+    TARGET_ACC = 0.95     # 你希望train_acc大于0.95就停止
+    accum_steps = 16  # 梯度累积步数
     if os.path.exists(cfg.checkpoint_path):
         print("加载检查点...")
         start_epoch = load_checkpoint(model, optimizer, cfg.checkpoint_path)
         print(f"恢复训练从第 {start_epoch} 轮开始。")
-    epochs = cfg.epochs
+    epochs = 9999
     for epoch in range(epochs):
+        epoch_start_time = time.time()  # 记录epoch开始时间
+
         model.train()
         total_train_loss = 0
         total_train_acc = 0
-        for x, y in train_loader:
+        count = 0  # 用于统计真实batch数
+
+        optimizer.zero_grad()  # 梯度清零放到外面
+        for step, (x, y) in enumerate(train_loader):
             x = x.to(device)
             y = y.to(device)
-            optimizer.zero_grad()
             logits = model(x)
             loss = loss_fn(logits.view(-1, vocab_size), y.view(-1))
+            loss = loss / accum_steps  # 累积步数归一化
             loss.backward()
-            optimizer.step()
-            total_train_loss += loss.item()
-            total_train_acc += calc_accuracy(logits.view(-1, vocab_size), y.view(-1))
-        total_train_loss /= len(train_loader)
-        total_train_acc /= len(train_loader)
+            
+            # 累积到指定步数才进行optimizer.step
+            if (step + 1) % accum_steps == 0 or (step + 1) == len(train_loader):
+                optimizer.step()
+                optimizer.zero_grad()
 
-        print(f"Pre-training Epoch {epoch}: Loss: {total_train_loss:.4f}, Acc: {total_train_acc:.4f}")
+            # 累计loss/acc，注意只统计一次，不用除以accum_steps
+            total_train_loss += loss.item() * accum_steps  # 还原为正常loss
+            total_train_acc += calc_accuracy(logits.view(-1, vocab_size), y.view(-1))
+            count += 1
+
+        total_train_loss /= count
+        total_train_acc /= count
+
+        epoch_seconds = time.time() - epoch_start_time
+
+        print(f"Pre-training Epoch {epoch}: Loss: {total_train_loss:.4f}, Acc: {total_train_acc:.4f}| Time: {epoch_seconds:.2f}S")
 
         # 保存模型权重
-        save_checkpoint(model, optimizer, epoch, cfg.save_path)
+        save_checkpoint(model, optimizer, epoch, cfg.pre_save_path)
+
+        if total_train_loss < TARGET_LOSS and total_train_acc > TARGET_ACC:
+            print(f"达到目标！Loss: {total_train_loss:.4f}, Acc: {total_train_acc:.4f}，提前终止并保存权重。")
+            break
+    
+    print(f"训练结束，权重已保存到 {cfg.pre_save_path}")
+    # 训练结束后上传权重
+    upload_file_to_oss(cfg.pre_save_path, cfg.pre_save_path)
 
 if __name__ == "__main__":
     train()
