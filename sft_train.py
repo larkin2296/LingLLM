@@ -8,6 +8,7 @@ from transformers import GPT2Tokenizer
 from utils.qa_dataset import QAJsonlDataset
 from utils.config import Config
 import argparse
+from utils.oss_upload import upload_file_to_oss
 
 cfg = Config()
 
@@ -74,6 +75,7 @@ def save_checkpoint(model, optimizer, epoch, filepath):
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
     }, filepath)
+    upload_file_to_oss(f"oss/{filepath}", filepath)
 
 def train():
     global best_loss, counter

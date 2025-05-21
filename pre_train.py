@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from utils.bin_dataset import BinTokenDataset
 from utils.config import Config
+from utils.oss_upload import upload_file_to_oss, download_file_from_oss
 
 cfg = Config()
 
@@ -54,9 +55,12 @@ def save_checkpoint(model, optimizer, epoch, filepath):
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
     }, filepath)
+    upload_file_to_oss(f"oss/{filepath}", filepath)
 
 # 恢复训练
 def load_checkpoint(model, optimizer, filepath):
+    if not os.path.exists(filepath):
+        download_file_from_oss(f"oss/{filepath}", filepath)
     checkpoint = torch.load(filepath)
     model.load_state_dict(checkpoint['model_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
