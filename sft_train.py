@@ -5,22 +5,23 @@ from model.minigpt import MiniLLM
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from transformers import GPT2Tokenizer
-from utils.qaDataset import QAJsonlDataset
-
-class Config:
-    # SFT训练集
-    train_jsonl = "data/val/train.jsonl"
-    batch_size = 32
-    max_seq_len = 1024
-    dropout = 0.2
-    embed_dim = 128
-    num_heads = 4
-    num_layers = 4
-    epochs = 30
-    save_path = "weights/sft_minigpt_best.pth"
-    checkpoint_path = "weights/sft_checkpoint.pth"
+from utils.qa_dataset import QAJsonlDataset
+from utils.config import Config
+import argparse
 
 cfg = Config()
+
+# 这样就能执行python train.py --max_seq_len 256 --epochs 20
+parser = argparse.ArgumentParser()
+parser.add_argument("--max_seq_len", type=int, default=128)
+parser.add_argument("--epochs", type=int, default=70)
+args = parser.parse_args()
+
+cfg.train_jsonl = "data/val/distill_r1_110k_sft.jsonl"
+cfg.save_path = "weights/sft_minigpt_best.pth"
+cfg.checkpoint_path = "weights/sft_checkpoint.pth"
+cfg.max_seq_len = args.max_seq_len
+cfg.epochs = args.epochs
 
 # 加载GPT2分词器
 tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
@@ -45,7 +46,7 @@ model = MiniLLM(
 ).to(device)
 
 loss_fn = nn.CrossEntropyLoss(ignore_index=tokenizer.pad_token_id or 0)
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-5)
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-5)
 scheduler = ReduceLROnPlateau(optimizer, 'min', patience=3)
 
 best_loss = float('inf')
