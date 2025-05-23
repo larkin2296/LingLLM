@@ -18,3 +18,6 @@ class Config:
     save_path = "weights/sft_minigpt_best.pth"
     checkpoint_path = "weights/checkpoint.pth"
     pre_save_path = "weights/minigpt_best.pth"
+    learning_rate = 1e-4
+    pre_log_file = "logs/pre_train_log.csv"
+    sft_log_file = "logs/sft_train_log.csv"

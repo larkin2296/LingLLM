@@ -55,9 +55,8 @@ patience = 3
 counter = 0
 STOP_THRESHOLD = 0.0005
 
-log_file = "logs/sft_train_log.csv"
-if not os.path.exists(log_file):
-    with open(log_file, "w", encoding="utf-8") as f:
+if not os.path.exists(cfg.sft_log_file):
+    with open(cfg.sft_log_file, "w", encoding="utf-8") as f:
         f.write("epoch,train_loss,train_acc\n")
 
 def calc_accuracy(pred_logits, targets):
@@ -142,7 +141,7 @@ def train():
         if (epoch + 1) % 10 == 0:
             save_checkpoint(model, optimizer, epoch, cfg.checkpoint_path)
 
-        with open(log_file, "a", encoding="utf-8") as f:
+        with open(cfg.sft_log_file, "a", encoding="utf-8") as f:
             f.write(f"{epoch},{total_loss},{total_acc}\n")
 
     print(f"模型权重已保存到 {cfg.save_path}")

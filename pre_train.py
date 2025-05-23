@@ -39,15 +39,30 @@ model = MiniLLM(
 loss_fn = nn.CrossEntropyLoss(ignore_index=PAD_TOKEN_ID)
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-5)
 scheduler = ReduceLROnPlateau(optimizer, 'min', patience=3)
+# optimizer = torch.optim.Adam(model.parameters(), lr=cfg.learning_rate, weight_decay=1e-5)
+
+# ReduceLROnPlateau（自适应学习率衰减）
+# scheduler = ReduceLROnPlateau(optimizer, 'min', patience=3, factor=0.5) # 如果loss（或val_loss/val_acc等监控指标）在若干epoch里没明显提升，就自动降低学习率。
+
+# Cosine Annealing（余弦退火）
+# 让学习率像余弦曲线一样“周期性减小”，一开始大、后面慢慢变小，甚至能多次反复。
+# from torch.optim.lr_scheduler import CosineAnnealingLR
+# scheduler = CosineAnnealingLR(optimizer, T_max=100)
+
+# Warmup（热身策略）
+# 前10%（比如前10个epoch）线性增加学习率，从很小到你设的最大值
+# from transformers import get_linear_schedule_with_warmup
+# scheduler = get_linear_schedule_with_warmup(
+#     optimizer, num_warmup_steps=100, num_training_steps=1000
+# )
 
 best_val_loss = float('inf')
 patience = 3
 counter = 0
 STOP_THRESHOLD = 0.0005
 
-log_file = "logs/train_log.csv"
-if not os.path.exists(log_file):
-    with open(log_file, "w", encoding="utf-8") as f:
+if not os.path.exists(cfg.pre_log_file):
+    with open(cfg.pre_log_file, "w", encoding="utf-8") as f:
         f.write("epoch,train_loss,train_acc,val_loss,val_acc\n")
 
 def save_checkpoint(model, optimizer, epoch, filepath):
@@ -129,12 +144,17 @@ def train():
         total_train_loss /= count
         total_train_acc /= count
 
+        scheduler.step(total_train_loss)
+
         epoch_seconds = time.time() - epoch_start_time
 
         print(f"Pre-training Epoch {epoch}: Loss: {total_train_loss:.4f}, Acc: {total_train_acc:.4f}| Time: {epoch_seconds:.2f}S")
 
         # 保存模型权重
         save_checkpoint(model, optimizer, epoch, cfg.checkpoint_path)
+
+        with open(cfg.pre_log_file, "a", encoding="utf-8") as f:
+            f.write(f"{epoch},{total_train_loss},{total_train_acc}\n")
 
         if total_train_loss < TARGET_LOSS and total_train_acc > TARGET_ACC:
             print(f"达到目标！Loss: {total_train_loss:.4f}, Acc: {total_train_acc:.4f}，提前终止并保存权重。")
