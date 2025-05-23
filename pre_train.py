@@ -37,7 +37,7 @@ model = MiniLLM(
 ).to(device)
 
 loss_fn = nn.CrossEntropyLoss(ignore_index=PAD_TOKEN_ID)
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-5)
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-5)
 scheduler = ReduceLROnPlateau(optimizer, 'min', patience=3)
 
 best_val_loss = float('inf')
@@ -80,13 +80,26 @@ def train():
     # 设定你的目标
     TARGET_LOSS = 0.05    # 你希望train_loss小于0.05就停止
     TARGET_ACC = 0.95     # 你希望train_acc大于0.95就停止
+    MIN_LOSS_DECREASE = 0.001  # 新增：最小下降幅度
     accum_steps = 16  # 梯度累积步数
+    last_loss = None
+    start_epoch = 0
     if os.path.exists(cfg.checkpoint_path):
         print("加载检查点...")
         start_epoch = load_checkpoint(model, optimizer, cfg.checkpoint_path)
         print(f"恢复训练从第 {start_epoch} 轮开始。")
-    epochs = 9999
-    for epoch in range(epochs):
+    elif os.path.exists(cfg.pre_save_path):
+        print("加载模型参数权重（无optimizer）...")
+        state = torch.load(cfg.pre_save_path, map_location=device)
+        if "model_state_dict" in state:
+            model.load_state_dict(state["model_state_dict"])
+        else:
+            model.load_state_dict(state)  # 兼容只存了权重的场景
+        print("模型参数已加载，optimizer和epoch将从头初始化")
+        # 这里start_epoch保持为0
+    else:
+        print("未找到权重，模型从头训练")
+    for epoch in range(start_epoch, cfg.epochs):
         epoch_start_time = time.time()  # 记录epoch开始时间
 
         model.train()
@@ -121,13 +134,22 @@ def train():
         print(f"Pre-training Epoch {epoch}: Loss: {total_train_loss:.4f}, Acc: {total_train_acc:.4f}| Time: {epoch_seconds:.2f}S")
 
         # 保存模型权重
-        save_checkpoint(model, optimizer, epoch, cfg.pre_save_path)
+        save_checkpoint(model, optimizer, epoch, cfg.checkpoint_path)
 
         if total_train_loss < TARGET_LOSS and total_train_acc > TARGET_ACC:
             print(f"达到目标！Loss: {total_train_loss:.4f}, Acc: {total_train_acc:.4f}，提前终止并保存权重。")
             break
+
+        if last_loss is not None:
+            delta_loss = abs(last_loss - total_train_loss)
+            print(f"Loss下降: {delta_loss:.6f}")
+            if delta_loss < MIN_LOSS_DECREASE:
+                print(f"Loss下降幅度({delta_loss:.6f})小于{MIN_LOSS_DECREASE}，提前终止训练。")
+                break
+        last_loss = total_train_loss
     
     print(f"训练结束，权重已保存到 {cfg.pre_save_path}")
+    torch.save(model.state_dict(), cfg.pre_save_path)
     # 训练结束后上传权重
     upload_file_to_oss(cfg.pre_save_path, cfg.pre_save_path)
 
