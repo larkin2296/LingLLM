@@ -105,6 +105,8 @@ def train():
         print(f"恢复训练从第 {start_epoch} 轮开始。")
     elif os.path.exists(cfg.pre_save_path):
         print("加载模型参数权重（无optimizer）...")
+        if not os.path.exists(cfg.pre_save_path):
+            download_file_from_oss(cfg.pre_save_path, cfg.pre_save_path)
         state = torch.load(cfg.pre_save_path, map_location=device)
         if "model_state_dict" in state:
             model.load_state_dict(state["model_state_dict"])
