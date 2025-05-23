@@ -1,0 +1,1 @@
+https://github.com/mobvoi/seq-monkey-data/blob/main/docs/pretrain_open_corpus.md

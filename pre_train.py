@@ -25,7 +25,7 @@ train_loader = DataLoader(
 )
 
 if torch.cuda.is_available():
-    device = torch.device("cuda")
+    device = torch.device("cuda:0")
 elif torch.backends.mps.is_available() and platform.system() == "Darwin":
     device = torch.device("mps")
 else:
@@ -43,7 +43,7 @@ model = MiniLLM(
 ).to(device)
 
 loss_fn = nn.CrossEntropyLoss(ignore_index=PAD_TOKEN_ID)
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-5)
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-5)
 scheduler = ReduceLROnPlateau(optimizer, 'min', patience=3)
 # optimizer = torch.optim.Adam(model.parameters(), lr=cfg.learning_rate, weight_decay=1e-5)
 

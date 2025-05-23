@@ -6,7 +6,7 @@ sp.load("spm_bpe.model")
 # tokens = sp.encode(text, out_type=str)
 
 VOCAB_SIZE = sp.get_piece_size()
-PAD_TOKEN_ID = None
+PAD_TOKEN_ID = 0
 def encode(text):
     return sp.encode(text, out_type=int)
 

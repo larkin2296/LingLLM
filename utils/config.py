@@ -1,6 +1,6 @@
 class Config:
     # 训练集地址
-    train_bin = "data/train/train.bin"
+    train_bin = "train_token_ids.bin"
     batch_size = 2
     # 最大序列长度
     max_seq_len = 512
@@ -13,7 +13,7 @@ class Config:
     # Transformer Block的层数
     num_layers = 4
     # 训练轮数
-    epochs = 80
+    epochs = 200
     # 模型保存路径
     save_path = "weights/sft_minigpt_best.pth"
     checkpoint_path = "weights/checkpoint.pth"
