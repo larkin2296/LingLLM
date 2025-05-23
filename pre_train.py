@@ -9,6 +9,7 @@ from utils.bin_dataset import BinTokenDataset
 from utils.config import Config
 from utils.oss_upload import upload_file_to_oss, download_file_from_oss
 import time
+import platform
 
 cfg = Config()
 
@@ -23,7 +24,12 @@ train_loader = DataLoader(
     # collate_fn=collate_fn,  # 若做pad再加
 )
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+if torch.cuda.is_available():
+    device = torch.device("cuda")
+elif torch.backends.mps.is_available() and platform.system() == "Darwin":
+    device = torch.device("mps")
+else:
+    device = torch.device("cpu")
 # print("使用设备:",device)
 # print("可用GPU数量：", torch.cuda.device_count())
 # print("当前GPU名称：", torch.cuda.get_device_name(0))

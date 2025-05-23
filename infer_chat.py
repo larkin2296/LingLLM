@@ -1,20 +1,18 @@
 import torch
 from model.minigpt import MiniLLM
-from transformers import GPT2Tokenizer
-from tokenizer import encode, decode, PAD_TOKEN_ID
+from tokenizer import encode, decode, VOCAB_SIZE, PAD_TOKEN_ID
+from utils.config import Config
+from utils.oss_upload import download_file_from_oss
+import os
 from utils.config import Config
 
 cfg = Config()
 
-tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
-if tokenizer.pad_token is None:
-    tokenizer.add_special_tokens({'pad_token': '<pad>'})
-VOCAB_SIZE = len(tokenizer)
-PAD_TOKEN_ID = tokenizer.pad_token_id
-
 # === 2. 新建模型并加载训练权重 ===
 model = MiniLLM(VOCAB_SIZE, cfg.embed_dim,cfg.max_seq_len, cfg.num_heads, cfg.num_layers)
-state = torch.load("weights/sft_minigpt_best.pth", map_location="cpu")
+if not os.path.exists(cfg.pre_save_path):
+            download_file_from_oss(cfg.pre_save_path, cfg.pre_save_path)
+state = torch.load(cfg.pre_save_path, map_location="cpu")
 model.load_state_dict(state)
 model.eval()
 
@@ -26,6 +24,8 @@ while True:
         break
     # 4. 用分词器转成token id
     input_ids = encode(prompt)
+    # print("input_ids:", len(input_ids), "max:", max(input_ids), "VOCAB_SIZE:", VOCAB_SIZE)
+    assert max(input_ids) < VOCAB_SIZE, "token_id 超出词表范围，模型embedding没有这么多token"
     if len(input_ids) > cfg.max_seq_len - 1:
         input_ids = input_ids[-(cfg.max_seq_len-1):]  # 保证长度不超限制
 
