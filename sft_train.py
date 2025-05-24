@@ -2,52 +2,43 @@ import torch
 import torch.nn as nn
 import os
 from model.minigpt import MiniLLM
+from tokenizer import VOCAB_SIZE, PAD_TOKEN_ID
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from transformers import GPT2Tokenizer
-from utils.qa_dataset import QAJsonlDataset
+from utils.bin_dataset import BinTokenDataset
 from utils.config import Config
-import argparse
 from utils.oss_upload import upload_file_to_oss
+import platform
+import time
 
 cfg = Config()
 
-# 这样就能执行python train.py --max_seq_len 256 --epochs 20
-parser = argparse.ArgumentParser()
-parser.add_argument("--max_seq_len", type=int, default=128)
-parser.add_argument("--epochs", type=int, default=70)
-args = parser.parse_args()
-
-cfg.train_jsonl = "data/val/train.jsonl"
-cfg.save_path = "weights/sft_minigpt_best.pth"
-cfg.checkpoint_path = "weights/sft_checkpoint.pth"
-cfg.max_seq_len = args.max_seq_len
-cfg.epochs = args.epochs
-
-# 加载GPT2分词器
-tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
-if tokenizer.pad_token is None:
-    tokenizer.add_special_tokens({'pad_token': '<pad>'})
-vocab_size = len(tokenizer)
-
-train_dataset = QAJsonlDataset(cfg.train_jsonl, tokenizer=tokenizer, max_seq_len=cfg.max_seq_len)
+train_dataset = BinTokenDataset(cfg.sft_train_bin, seq_len=cfg.max_seq_len, max_tokens=10_000_000)
+max_seq_len = cfg.max_seq_len
 train_loader = DataLoader(
     train_dataset,
     batch_size=cfg.batch_size,
     shuffle=True,
     num_workers=2,
     drop_last=False,
+    # collate_fn=collate_fn,  # 若做pad再加
 )
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+if torch.cuda.is_available():
+    device = torch.device("cuda:0")
+elif torch.backends.mps.is_available() and platform.system() == "Darwin":
+    device = torch.device("mps")
+else:
+    device = torch.device("cpu")
 
 model = MiniLLM(
-    vocab_size, cfg.embed_dim, cfg.max_seq_len,
+    VOCAB_SIZE, cfg.embed_dim, cfg.max_seq_len,
     cfg.num_heads, num_layers=cfg.num_layers, dropout=cfg.dropout
 ).to(device)
 
-loss_fn = nn.CrossEntropyLoss(ignore_index=tokenizer.pad_token_id or 0)
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-5)
+loss_fn = nn.CrossEntropyLoss(ignore_index=PAD_TOKEN_ID)
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-5)
 scheduler = ReduceLROnPlateau(optimizer, 'min', patience=3)
 
 best_loss = float('inf')
@@ -61,7 +52,7 @@ if not os.path.exists(cfg.sft_log_file):
 
 def calc_accuracy(pred_logits, targets):
     preds = pred_logits.argmax(dim=-1)
-    mask = targets != tokenizer.pad_token_id
+    mask = targets != PAD_TOKEN_ID
     valid_count = mask.sum().item()
     if valid_count == 0:
         return 0.0
@@ -107,6 +98,8 @@ def train():
         print(f"恢复训练从第 {start_epoch} 轮开始。")
     epochs = cfg.epochs
     for epoch in range(epochs):
+        epoch_start_time = time.time()  # 记录epoch开始时间
+
         model.train()
         total_loss = 0
         total_acc = 0
@@ -115,17 +108,19 @@ def train():
             y = y.to(device)
             optimizer.zero_grad()
             logits = model(x)
-            loss = loss_fn(logits.view(-1, vocab_size), y.view(-1))
+            loss = loss_fn(logits.view(-1, VOCAB_SIZE), y.view(-1))
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
-            total_acc += calc_accuracy(logits.view(-1, vocab_size), y.view(-1))
+            total_acc += calc_accuracy(logits.view(-1, VOCAB_SIZE), y.view(-1))
         total_loss /= len(train_loader)
         total_acc /= len(train_loader)
 
         scheduler.step(total_loss)
 
-        print(f"SFT Epoch {epoch}: Loss: {total_loss:.4f}, Acc: {total_acc:.4f}")
+        epoch_seconds = time.time() - epoch_start_time
+
+        print(f"Pre-training Epoch {epoch}: Loss: {total_loss:.4f}, Acc: {total_acc:.4f}| Time: {epoch_seconds:.2f}S")
 
         if total_loss < best_loss - 1e-5:
             best_loss = total_loss
@@ -145,6 +140,8 @@ def train():
             f.write(f"{epoch},{total_loss},{total_acc}\n")
 
     print(f"模型权重已保存到 {cfg.save_path}")
+    torch.save(model.state_dict(), cfg.save_path)
+    upload_file_to_oss(cfg.save_path, cfg.save_path)
 
 if __name__ == "__main__":
     train()

@@ -8,13 +8,22 @@ from utils.config import Config
 
 cfg = Config()
 
+def make_prompt(user_input):
+    # 和SFT训练一致
+    return f"Instruction: {user_input}\nOutput:"
+
 # === 2. 新建模型并加载训练权重 ===
 model = MiniLLM(VOCAB_SIZE, cfg.embed_dim,cfg.max_seq_len, cfg.num_heads, cfg.num_layers)
-if not os.path.exists(cfg.pre_save_path):
+if not os.path.exists(cfg.save_path):
+            download_file_from_oss(cfg.save_path, cfg.save_path)
+            state = torch.load(cfg.save_path, map_location="cpu")
+            model.load_state_dict(state)
+            model.eval()
+elif not os.path.exists(cfg.pre_save_path):
             download_file_from_oss(cfg.pre_save_path, cfg.pre_save_path)
-state = torch.load(cfg.pre_save_path, map_location="cpu")
-model.load_state_dict(state)
-model.eval()
+            state = torch.load(cfg.pre_save_path, map_location="cpu")
+            model.load_state_dict(state)
+            model.eval()
 
 # === 3. 对话循环 ===
 while True:
@@ -22,8 +31,10 @@ while True:
     if prompt.lower() in ['exit', 'quit', 'q']:
         print("再见！")
         break
+
+    prompt_text = make_prompt(prompt)
     # 4. 用分词器转成token id
-    input_ids = encode(prompt)
+    input_ids = encode(prompt_text)
     # print("input_ids:", len(input_ids), "max:", max(input_ids), "VOCAB_SIZE:", VOCAB_SIZE)
     assert max(input_ids) < VOCAB_SIZE, "token_id 超出词表范围，模型embedding没有这么多token"
     if len(input_ids) > cfg.max_seq_len - 1:

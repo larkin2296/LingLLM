@@ -4,8 +4,8 @@ import numpy as np
 from tqdm import tqdm
 
 # 配置
-DATA_FILE = "C:/Users/54646/Desktop/LingLLM/data/train/mobvoi_seq_monkey_general_open_corpus.jsonl"  # 你的文本文件名
-OUTPUT_BIN = "train_token_ids.bin"
+DATA_FILE = "./data/val/distill_r1_110k_sft.jsonl"  # 你的文本文件名
+OUTPUT_BIN = "./data/val/sft_train_token_ids.bin"
 SENTENCEPIECE_MODEL = "spm_bpe.model"
 ADD_EOS = True
 
@@ -21,11 +21,11 @@ print("总样本数:", len(dataset))
 with open(OUTPUT_BIN, "wb") as fout:
     max_id, min_id, total = 0, 1 << 30, 0
     for example in tqdm(dataset, desc="分词写bin"):
-        # instruction = example.get("instruction", "")
-        # input_ = example.get("input", "")
-        # output = example.get("output", "")
-        # text = f"Instruction: {instruction}\nInput: {input_}\nOutput: {output}".strip()
-        text = example["text"].strip()
+        instruction = example.get("instruction", "")
+        input_ = example.get("input", "")
+        output = example.get("output", "")
+        text = f"Instruction: {instruction}\nInput: {input_}\nOutput: {output}".strip()
+        # text = example["text"].strip()
         if not text: continue
         ids = sp.encode(text, out_type=int)
         if ADD_EOS:
