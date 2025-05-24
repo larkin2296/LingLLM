@@ -15,7 +15,7 @@ class MiniTransformerBlock(nn.Module):
         # 前馈网络，两层全连接加激活
         self.ff = nn.Sequential(
             nn.Linear(embed_size, embed_size * 4),
-            nn.ReLU(),
+            nn.GELU(),
             nn.Linear(embed_size * 4, embed_size)
         )
         # 第二层LayerNorm
@@ -27,14 +27,15 @@ class MiniTransformerBlock(nn.Module):
         # 是现代Transformer（包括BERT、GPT等）训练好效果的“秘诀”之一
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x):
+    def forward(self, x, attn_mask=None, key_padding_mask=None):
         # x形状：[batch, seq_len, embed_dim]
-        attn_out, _ = self.attn(x, x, x) # 自注意力机制
-        x = x + self.dropout(attn_out)     # 残差连接
-        x = self.norm1(x)
-        ff_out = self.ff(x)
-        x = x + self.dropout(ff_out)      # 残差连接
-        x = self.norm2(x)
+        x_norm = self.norm1(x)
+        attn_out, _ = self.attn(x_norm, x_norm, x_norm,attn_mask=attn_mask, key_padding_mask=key_padding_mask)    # padding mask (标记pad位置))
+        x = x + self.dropout(attn_out)
+        # ...同理FFN...
+        x_norm2 = self.norm2(x)
+        ff_out = self.ff(x_norm2)
+        x = x + self.dropout(ff_out)
         return x
     
 class MiniLLM(nn.Module):
@@ -55,18 +56,25 @@ class MiniLLM(nn.Module):
         # self.block = MiniTransformerBlock(embed_dim, num_heads) # Transformer Block
         self.fc_out = nn.Linear(embed_dim, vocab_size)
 
-    def forward(self, input_ids):
-        # input_ids形状：[batch, seq_len]
-        seq_len = input_ids.size(1)
+    def forward(self, input_ids, attention_mask=None):
+        batch, seq_len = input_ids.size()
+        device = input_ids.device
+
         # start (Number, 可选) – 点集的起始值。默认值：0。
         # end (Number) – 点集的结束值
         # step (Number, 可选) – 每对相邻点之间的间隔。默认值：1。
         # 返回一个一维张量，包含从 start 到 end 的数字，步长为 step。
-        positions = torch.arange(seq_len, device=input_ids.device).unsqueeze(0) # 位置编码
-        x = self.embedding(input_ids) + self.pos_embedding(positions) # 词嵌入+位置编码
+        positions = torch.arange(seq_len, device=device).unsqueeze(0).expand(batch, -1)
+        x = self.embedding(input_ids) + self.pos_embedding(positions)
+        
+        # causal mask：[seq, seq]
+        causal_mask = torch.triu(torch.ones(seq_len, seq_len, device=device), diagonal=1)
+        causal_mask = causal_mask.masked_fill(causal_mask == 1, float('-inf'))
+        
+        # attention_mask: [batch, seq]，padding位置是0
+        key_padding_mask = (attention_mask == 0) if attention_mask is not None else None
+        
         for block in self.blocks:
-            x = block(x)
+            x = block(x, attn_mask=causal_mask, key_padding_mask=key_padding_mask)
         logits = self.fc_out(x)
         return logits
-
-

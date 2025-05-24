@@ -1,6 +1,6 @@
 class Config:
     # 训练集地址
-    train_bin = "train_token_ids.bin"
+    train_bin = "./data/train/pre_train_token_ids.bin"
     sft_train_bin = "./data/val/sft_train_token_ids.bin"
     batch_size = 2
     # 最大序列长度
