@@ -156,8 +156,6 @@ def train():
 
         epoch_seconds = time.time() - epoch_start_time
 
-        print(f"Pre-training Epoch {epoch}: Loss: {total_train_loss:.4f}, Acc: {total_train_acc:.4f}| Time: {epoch_seconds:.2f}S")
-
         # 保存模型权重
         save_checkpoint(model, optimizer, epoch, cfg.checkpoint_path)
 
@@ -170,10 +168,12 @@ def train():
 
         if last_loss is not None:
             delta_loss = abs(last_loss - total_train_loss)
-            print(f"Loss下降: {delta_loss:.6f}")
+            print(f"Pre-training Epoch {epoch}: Loss: {total_train_loss:.4f}, Acc: {total_train_acc:.4f}| Time: {epoch_seconds:.2f}S| Loss下降: {delta_loss:.6f}")
             if delta_loss < MIN_LOSS_DECREASE:
                 print(f"Loss下降幅度({delta_loss:.6f})小于{MIN_LOSS_DECREASE}，提前终止训练。")
                 break
+        else:
+            print(f"Pre-training Epoch {epoch}: Loss: {total_train_loss:.4f}, Acc: {total_train_acc:.4f}| Time: {epoch_seconds:.2f}S")
         last_loss = total_train_loss
     
     print(f"训练结束，权重已保存到 {cfg.pre_save_path}")

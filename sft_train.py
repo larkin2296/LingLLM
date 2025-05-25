@@ -72,7 +72,9 @@ def save_checkpoint(model, optimizer, epoch, filepath):
 
 def train():
     global best_loss, counter
+    last_loss = None
     start_epoch = 0
+    MIN_LOSS_DECREASE = 0.001
     if os.path.exists(cfg.sft_checkpoint_path):
         print("加载SFT检查点...")
         checkpoint = torch.load(cfg.sft_checkpoint_path, map_location=device)
@@ -130,6 +132,15 @@ def train():
 
         with open(cfg.sft_log_file, "a", encoding="utf-8") as f:
             f.write(f"{epoch},{total_loss},{total_acc}\n")
+
+        if last_loss is not None:
+            delta_loss = abs(last_loss - total_loss)
+            print(f"Pre-training Epoch {epoch}: Loss: {total_loss:.4f}, Acc: {total_acc:.4f}| Time: {epoch_seconds:.2f}S| Loss下降: {delta_loss:.6f}")
+            if delta_loss < MIN_LOSS_DECREASE:
+                print(f"Loss下降幅度({delta_loss:.6f})小于{MIN_LOSS_DECREASE}，提前终止训练。")
+                break
+        else:
+            print(f"Pre-training Epoch {epoch}: Loss: {total_loss:.4f}, Acc: {total_acc:.4f}| Time: {epoch_seconds:.2f}S")
 
     print(f"模型权重已保存到 {cfg.save_path}")
     torch.save(model.state_dict(), cfg.save_path)
