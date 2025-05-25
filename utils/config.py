@@ -1,7 +1,7 @@
 class Config:
     # 训练集地址
     train_bin = "./data/train/pre_train_token_ids.bin"
-    sft_train_bin = "./data/val/sft_train_token_ids.bin"
+    sft_train = "./data/val/distill_r1_110k_sft.jsonl"
     batch_size = 2
     # 最大序列长度
     max_seq_len = 512
@@ -16,9 +16,12 @@ class Config:
     # 训练轮数
     epochs = 200
     # 模型保存路径
-    save_path = "weights/sft_minigpt_best.pth"
-    checkpoint_path = "weights/checkpoint.pth"
+    # 预训练文件配置
     pre_save_path = "weights/minigpt_best.pth"
-    learning_rate = 1e-4
     pre_log_file = "logs/pre_train_log.csv"
+    checkpoint_path = "weights/checkpoint.pth"
+    # SFT训练配置
+    save_path = "weights/sft_minigpt_best.pth"
     sft_log_file = "logs/sft_train_log.csv"
+    sft_checkpoint_path = "weights/sft_checkpoint.pth"
+    learning_rate = 1e-4

@@ -5,16 +5,19 @@ from model.minigpt import MiniLLM
 from tokenizer import VOCAB_SIZE, PAD_TOKEN_ID
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from transformers import GPT2Tokenizer
-from utils.bin_dataset import BinTokenDataset
+from utils.sft_dataset import SFTDataset
 from utils.config import Config
 from utils.oss_upload import upload_file_to_oss
 import platform
 import time
+import sentencepiece as spm
+
+sp = spm.SentencePieceProcessor()
+sp.load("spm_bpe.model")
 
 cfg = Config()
 
-train_dataset = BinTokenDataset(cfg.sft_train_bin, seq_len=cfg.max_seq_len, max_tokens=10_000_000)
+train_dataset = SFTDataset(cfg.sft_train, sp, max_seq_len=cfg.max_seq_len)
 max_seq_len = cfg.max_seq_len
 train_loader = DataLoader(
     train_dataset,
@@ -37,7 +40,7 @@ model = MiniLLM(
     cfg.num_heads, num_layers=cfg.num_layers, dropout=cfg.dropout
 ).to(device)
 
-loss_fn = nn.CrossEntropyLoss(ignore_index=PAD_TOKEN_ID)
+loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-5)
 scheduler = ReduceLROnPlateau(optimizer, 'min', patience=3)
 
@@ -52,7 +55,7 @@ if not os.path.exists(cfg.sft_log_file):
 
 def calc_accuracy(pred_logits, targets):
     preds = pred_logits.argmax(dim=-1)
-    mask = targets != PAD_TOKEN_ID
+    mask = targets != -100
     valid_count = mask.sum().item()
     if valid_count == 0:
         return 0.0
@@ -69,33 +72,22 @@ def save_checkpoint(model, optimizer, epoch, filepath):
 
 def train():
     global best_loss, counter
-    if os.path.exists(cfg.checkpoint_path):
+    start_epoch = 0
+    if os.path.exists(cfg.sft_checkpoint_path):
         print("加载SFT检查点...")
-        checkpoint = torch.load(cfg.checkpoint_path, map_location=device)
+        checkpoint = torch.load(cfg.sft_checkpoint_path, map_location=device)
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         start_epoch = checkpoint['epoch']
         print(f"恢复训练从第 {start_epoch} 轮开始。")
-    # 2. 没有SFT checkpoint就加载预训练权重
     elif os.path.exists(cfg.pre_save_path):
         print("加载预训练权重 weights/minigpt_best.pth ...")
-        state = torch.load("weights/minigpt_best.pth", map_location=device)
+        state = torch.load(cfg.pre_save_path, map_location=device)
         if isinstance(state, dict) and 'model_state_dict' in state:
             model.load_state_dict(state['model_state_dict'])
         else:
             model.load_state_dict(state)
         print("加载完毕！")
-        start_epoch = 0
-    else:
-        print("未找到预训练权重，将随机初始化参数！")
-        start_epoch = 0
-    if os.path.exists(cfg.checkpoint_path):
-        print("加载检查点...")
-        checkpoint = torch.load(cfg.checkpoint_path)
-        model.load_state_dict(checkpoint['model_state_dict'])
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        start_epoch = checkpoint['epoch']
-        print(f"恢复训练从第 {start_epoch} 轮开始。")
     epochs = cfg.epochs
     for epoch in range(epochs):
         epoch_start_time = time.time()  # 记录epoch开始时间
@@ -108,7 +100,7 @@ def train():
             y = y.to(device)
             optimizer.zero_grad()
             logits = model(x)
-            loss = loss_fn(logits.view(-1, VOCAB_SIZE), y.view(-1))
+            loss = loss_fn(logits.view(-1, logits.size(-1)), y.view(-1))
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
@@ -134,7 +126,7 @@ def train():
             break
 
         if (epoch + 1) % 10 == 0:
-            save_checkpoint(model, optimizer, epoch, cfg.checkpoint_path)
+            save_checkpoint(model, optimizer, epoch, cfg.sft_checkpoint_path)
 
         with open(cfg.sft_log_file, "a", encoding="utf-8") as f:
             f.write(f"{epoch},{total_loss},{total_acc}\n")
