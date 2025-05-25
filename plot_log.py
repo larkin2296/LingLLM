@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import csv
 
 # 文件路径
-log_file = "logs/train_log.csv"
+log_file = "logs/pre_train_log.csv"
 history_file = "logs/train_history.csv"
 curve_dir = "logs/curves"
 
