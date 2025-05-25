@@ -47,7 +47,7 @@ model = MiniLLM(
 
 loss_fn = nn.CrossEntropyLoss(ignore_index=PAD_TOKEN_ID)
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-5)
-scheduler = ReduceLROnPlateau(optimizer, 'min', patience=3)
+scheduler = ReduceLROnPlateau(optimizer, 'min', patience=3, factor=0.5)
 # optimizer = torch.optim.Adam(model.parameters(), lr=cfg.learning_rate, weight_decay=1e-5)
 
 # ReduceLROnPlateau（自适应学习率衰减）
@@ -104,7 +104,7 @@ def train():
     # 设定你的目标
     TARGET_LOSS = 0.05    # 你希望train_loss小于0.05就停止
     TARGET_ACC = 0.95     # 你希望train_acc大于0.95就停止
-    MIN_LOSS_DECREASE = 0.001  # 新增：最小下降幅度
+    MIN_LOSS_DECREASE = 0.003  # 新增：最小下降幅度
     accum_steps = 16  # 梯度累积步数
     last_loss = None
     start_epoch = 0
