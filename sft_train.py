@@ -40,8 +40,8 @@ model = MiniLLM(
     cfg.num_heads, num_layers=cfg.num_layers, dropout=cfg.dropout
 ).to(device)
 
-total_params = sum(p.numel() for p in model.parameters())
-print("模型总参数量:", total_params)
+# total_params = sum(p.numel() for p in model.parameters())
+# print("模型总参数量:", total_params)
 
 loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-5)
