@@ -2,63 +2,47 @@ import torch
 import torch.nn as nn
 import os
 from model.minigpt import MiniLLM
-from tokenizer import VOCAB_SIZE, PAD_TOKEN_ID
+from tokenizer import VOCAB_SIZE, PAD_TOKEN_ID, tokenizer
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from utils.sft_dataset import SFTDataset
+from utils.sft_dataset import SFTJsonlDataset
 from utils.config import Config
-from utils.oss_upload import upload_file_to_oss
+from utils.oss_upload import upload_file_to_oss, download_file_from_oss
 import platform
 import time
-import sentencepiece as spm
-
-sp = spm.SentencePieceProcessor()
-sp.load("spm_bpe.model")
 
 cfg = Config()
 
-train_dataset = SFTDataset(cfg.sft_train, sp, max_seq_len=cfg.max_seq_len)
-max_seq_len = cfg.max_seq_len
-train_loader = DataLoader(
-    train_dataset,
-    batch_size=cfg.batch_size,
-    shuffle=True,
-    num_workers=2,
-    drop_last=False,
-    # collate_fn=collate_fn,  # 若做pad再加
-)
-
 if torch.cuda.is_available():
     device = torch.device("cuda:0")
-elif torch.backends.mps.is_available() and platform.system() == "Darwin":
-    device = torch.device("mps")
 else:
     device = torch.device("cpu")
+
+sft_dataset = SFTJsonlDataset(cfg.sft_train, tokenizer, seq_len=cfg.max_seq_len)
+sft_loader = DataLoader(
+    sft_dataset, batch_size=cfg.batch_size, shuffle=True, num_workers=2, drop_last=False
+)
 
 model = MiniLLM(
     VOCAB_SIZE, cfg.embed_dim, cfg.max_seq_len,
     cfg.num_heads, num_layers=cfg.num_layers, dropout=cfg.dropout
 ).to(device)
 
-# total_params = sum(p.numel() for p in model.parameters())
-# print("模型总参数量:", total_params)
-
 loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-5)
-scheduler = ReduceLROnPlateau(optimizer, 'min', patience=3)
+optimizer = torch.optim.Adam(model.parameters(), lr=cfg.learning_rate, weight_decay=1e-5)
+scheduler = ReduceLROnPlateau(optimizer, 'min', patience=3, factor=0.5)
 
-best_loss = float('inf')
-patience = 3
-counter = 0
-STOP_THRESHOLD = 0.0005
-
-if not os.path.exists(cfg.sft_log_file):
-    with open(cfg.sft_log_file, "w", encoding="utf-8") as f:
-        f.write("epoch,train_loss,train_acc\n")
+def load_checkpoint(model, optimizer, filepath):
+    if not os.path.exists(filepath):
+        download_file_from_oss(filepath, filepath)
+    checkpoint = torch.load(filepath)
+    model.load_state_dict(checkpoint['model_state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    return checkpoint['epoch'] 
 
 def calc_accuracy(pred_logits, targets):
     preds = pred_logits.argmax(dim=-1)
-    mask = targets != -100
+    mask = targets != PAD_TOKEN_ID
     valid_count = mask.sum().item()
     if valid_count == 0:
         return 0.0
@@ -71,83 +55,65 @@ def save_checkpoint(model, optimizer, epoch, filepath):
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
     }, filepath)
-    upload_file_to_oss(filepath, filepath)
 
-def train():
-    global best_loss, counter
+def train_sft():
+    accum_steps = 16
     last_loss = None
     start_epoch = 0
-    MIN_LOSS_DECREASE = 0.001
+
+    # checkpoint逻辑同上
     if os.path.exists(cfg.sft_checkpoint_path):
         print("加载SFT检查点...")
-        checkpoint = torch.load(cfg.sft_checkpoint_path, map_location=device)
-        model.load_state_dict(checkpoint['model_state_dict'])
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        start_epoch = checkpoint['epoch']
+        start_epoch = load_checkpoint(model, optimizer, cfg.sft_checkpoint_path)
         print(f"恢复训练从第 {start_epoch} 轮开始。")
-    elif os.path.exists(cfg.pre_save_path):
-        print("加载预训练权重 weights/minigpt_best.pth ...")
-        state = torch.load(cfg.pre_save_path, map_location=device)
-        if isinstance(state, dict) and 'model_state_dict' in state:
-            model.load_state_dict(state['model_state_dict'])
+    elif os.path.exists(cfg.save_path):
+        print("加载SFT模型参数（无optimizer）...")
+        state = torch.load(cfg.save_path, map_location=device)
+        if "model_state_dict" in state:
+            model.load_state_dict(state["model_state_dict"])
         else:
             model.load_state_dict(state)
-        print("加载完毕！")
-    epochs = cfg.epochs
-    for epoch in range(epochs):
-        epoch_start_time = time.time()  # 记录epoch开始时间
+        print("SFT参数已加载，optimizer和epoch将从头初始化")
+    else:
+        download_file_from_oss(cfg.pre_save_path, cfg.pre_save_path)
+        state = torch.load(cfg.pre_save_path, map_location=device)
+        if "model_state_dict" in state:
+            model.load_state_dict(state["model_state_dict"])
+        else:
+            model.load_state_dict(state)
+        print("SFT无权重，从头训练")
 
+    for epoch in range(start_epoch, cfg.epochs):
         model.train()
         total_loss = 0
         total_acc = 0
-        for x, y in train_loader:
+        count = 0
+        optimizer.zero_grad()
+        for step, (x, y) in enumerate(sft_loader):
             x = x.to(device)
             y = y.to(device)
-            optimizer.zero_grad()
-            logits = model(x)
-            loss = loss_fn(logits.view(-1, logits.size(-1)), y.view(-1))
+            attention_mask = (x != PAD_TOKEN_ID)
+            logits = model(x, attention_mask=attention_mask)
+            loss = loss_fn(logits.view(-1, VOCAB_SIZE), y.view(-1))
+            loss = loss / accum_steps
             loss.backward()
-            optimizer.step()
-            total_loss += loss.item()
+            if (step + 1) % accum_steps == 0 or (step + 1) == len(sft_loader):
+                optimizer.step()
+                optimizer.zero_grad()
+            total_loss += loss.item() * accum_steps
             total_acc += calc_accuracy(logits.view(-1, VOCAB_SIZE), y.view(-1))
-        total_loss /= len(train_loader)
-        total_acc /= len(train_loader)
-
+            count += 1
+        total_loss /= count
+        total_acc /= count
         scheduler.step(total_loss)
-
-        epoch_seconds = time.time() - epoch_start_time
-
-        print(f"Pre-training Epoch {epoch}: Loss: {total_loss:.4f}, Acc: {total_acc:.4f}| Time: {epoch_seconds:.2f}S")
-
-        if total_loss < best_loss - 1e-5:
-            best_loss = total_loss
-            counter = 0
-            torch.save(model.state_dict(), cfg.save_path)
-        else:
-            counter += 1
-
-        if counter >= patience:
-            print(f"Early stopping triggered at epoch {epoch}")
-            break
-
-        if (epoch + 1) % 10 == 0:
-            save_checkpoint(model, optimizer, epoch, cfg.sft_checkpoint_path)
-
+        save_checkpoint(model, optimizer, epoch, cfg.sft_checkpoint_path)
         with open(cfg.sft_log_file, "a", encoding="utf-8") as f:
             f.write(f"{epoch},{total_loss},{total_acc}\n")
-
-        if last_loss is not None:
-            delta_loss = abs(last_loss - total_loss)
-            print(f"Pre-training Epoch {epoch}: Loss: {total_loss:.4f}, Acc: {total_acc:.4f}| Time: {epoch_seconds:.2f}S| Loss下降: {delta_loss:.6f}")
-            if delta_loss < MIN_LOSS_DECREASE:
-                print(f"Loss下降幅度({delta_loss:.6f})小于{MIN_LOSS_DECREASE}，提前终止训练。")
-                break
-        else:
-            print(f"Pre-training Epoch {epoch}: Loss: {total_loss:.4f}, Acc: {total_acc:.4f}| Time: {epoch_seconds:.2f}S")
-
-    print(f"模型权重已保存到 {cfg.save_path}")
+        print(f"SFT Epoch {epoch}: Loss {total_loss:.4f} Acc {total_acc:.4f}")
+        last_loss = total_loss
+    print(f"SFT训练结束，权重已保存到 {cfg.save_path}")
     torch.save(model.state_dict(), cfg.save_path)
     upload_file_to_oss(cfg.save_path, cfg.save_path)
 
 if __name__ == "__main__":
-    train()
+    train_sft()

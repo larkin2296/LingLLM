@@ -21,11 +21,11 @@ print("总样本数:", len(dataset))
 with open(OUTPUT_BIN, "wb") as fout:
     max_id, min_id, total = 0, 1 << 30, 0
     for example in tqdm(dataset, desc="分词写bin"):
-        # instruction = example.get("instruction", "")
-        # input_ = example.get("input", "")
-        # output = example.get("output", "")
-        # text = f"Instruction: {instruction}\nInput: {input_}\nOutput: {output}".strip()
-        text = example["text"].strip()
+        instruction = example.get("instruction", "")
+        input_ = example.get("input", "")
+        output = example.get("output", "")
+        text = f"Instruction: {instruction}\nInput: {input_}\nOutput: {output}".strip()
+        # text = example["text"].strip()
         if not text: continue
         ids = sp.encode(text, out_type=int)
         if ADD_EOS:

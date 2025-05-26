@@ -69,7 +69,7 @@ class MiniLLM(nn.Module):
         
         # causal mask：[seq, seq]
         causal_mask = torch.triu(torch.ones(seq_len, seq_len, device=device), diagonal=1)
-        causal_mask = causal_mask.masked_fill(causal_mask == 1, float('-inf'))
+        causal_mask = causal_mask == 1
         
         # attention_mask: [batch, seq]，padding位置是0
         key_padding_mask = (attention_mask == 0) if attention_mask is not None else None
