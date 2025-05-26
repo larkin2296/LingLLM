@@ -22,6 +22,7 @@ class SFTJsonlDataset(Dataset):
                 if len(prompt_token_ids) < half_seq_len:
                     input_ids = (prompt_token_ids + output_token_ids)[:seq_len]
                     labels = [-100] * len(prompt_token_ids) + output_token_ids
+                    labels = labels[:seq_len]
                     if len(input_ids) < seq_len:
                         input_ids += [PAD_TOKEN_ID] * (seq_len - len(input_ids))
                         labels += [-100] * (seq_len - len(labels))
@@ -30,6 +31,7 @@ class SFTJsonlDataset(Dataset):
                     input_ids = new_prompt_token_ids + output_token_ids
                     labels = [-100] * len(new_prompt_token_ids) + output_token_ids
                     input_ids = input_ids[:seq_len]
+                    labels = labels[:seq_len]
                     if len(input_ids) < seq_len:
                         input_ids += [PAD_TOKEN_ID] * (seq_len - len(input_ids))
                         labels += [-100] * (seq_len - len(labels))
