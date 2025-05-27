@@ -8,11 +8,11 @@ class Config:
     # 它能在训练时随机“丢弃”一部分神经元（设为0），防止模型对训练数据“死记硬背”而失去泛化能力。
     dropout = 0.2
     # 模型维度
-    embed_dim = 128
+    embed_dim = 1024
     # 多头注意力机制的头数
-    num_heads = 4
+    num_heads = 16
     # Transformer Block的层数
-    num_layers = 4
+    num_layers = 16
     # 训练轮数
     epochs = 200
     # 模型保存路径
