@@ -4,7 +4,6 @@ from tokenizer import encode, decode, VOCAB_SIZE, PAD_TOKEN_ID
 from utils.config import Config
 from utils.oss_upload import download_file_from_oss
 import os
-from utils.config import Config
 
 cfg = Config()
 
@@ -41,7 +40,12 @@ while True:
     prompt_text = make_prompt(prompt)
     # 4. 用分词器转成token id
     input_ids = encode(prompt_text)
-    # print("input_ids:", len(input_ids), "max:", max(input_ids), "VOCAB_SIZE:", VOCAB_SIZE)
+
+    # input_ids_tensor = torch.tensor(input_ids)
+    # print("input_ids 最小值:", input_ids_tensor.min().item())
+    # print("input_ids 最大值:", input_ids_tensor.max().item())
+    # print("vocab_size:", VOCAB_SIZE)
+
     assert max(input_ids) < VOCAB_SIZE, "token_id 超出词表范围，模型embedding没有这么多token"
     if len(input_ids) > cfg.max_seq_len - 1:
         input_ids = input_ids[-(cfg.max_seq_len-1):]  # 保证长度不超限制
@@ -50,9 +54,29 @@ while True:
     generated = input_ids.copy()
     for _ in range(512):  # 最多生成50个字，可调
         input_tensor = torch.tensor([generated[-(cfg.max_seq_len-1):]], dtype=torch.long)
-        logits = model(input_tensor)
+        attention_mask = (input_tensor != PAD_TOKEN_ID).long()
+        logits = model(input_tensor, attention_mask=attention_mask)
+        # print("logits max:", logits.max().item())
+        # print("logits min:", logits.min().item())
+        # print("logits nan数:", torch.isnan(logits).sum().item())
+        # print("logits inf数:", torch.isinf(logits).sum().item())
         next_token_logits = logits[0, -1, :]
-        next_token_id = next_token_logits.argmax().item()  # 选概率最大token
+        # next_token_id = next_token_logits.argmax().item()  # 选概率最大token
+
+        # top-k采样
+        k = 5
+        temperature = 1.0
+        topk = torch.topk(next_token_logits, k)
+        topk_ids = topk.indices
+        topk_values = topk.values
+
+        # 将topk的概率归一化后采样
+        probs = torch.softmax(topk_values / temperature, dim=0)
+        next_token_id = topk_ids[torch.multinomial(probs, 1).item()].item()
+
+        # print("topk token ids:", topk_ids.tolist())
+        # print("topk probs:", probs.tolist())
+        # print("采样选中的token id:", next_token_id)
 
         if next_token_id == PAD_TOKEN_ID:
             break

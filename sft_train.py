@@ -60,7 +60,6 @@ def save_checkpoint(model, optimizer, epoch, filepath):
     }, filepath)
 
 def train_sft():
-    accum_steps = 16
     last_loss = None
     start_epoch = 0
 
@@ -100,12 +99,10 @@ def train_sft():
             attention_mask = (x != PAD_TOKEN_ID)
             logits = model(x, attention_mask=attention_mask)
             loss = loss_fn(logits.view(-1, VOCAB_SIZE), y.view(-1))
-            loss = loss / accum_steps
             loss.backward()
-            if (step + 1) % accum_steps == 0 or (step + 1) == len(sft_loader):
-                optimizer.step()
-                optimizer.zero_grad()
-            total_loss += loss.item() * accum_steps
+            optimizer.step()
+            optimizer.zero_grad()
+            total_loss += loss.item()
             total_acc += calc_accuracy(logits.view(-1, VOCAB_SIZE), y.view(-1))
             count += 1
         total_loss /= count
@@ -123,7 +120,7 @@ def train_sft():
         last_loss = total_loss
     print(f"SFT训练结束，权重已保存到 {cfg.save_path}")
     torch.save(model.state_dict(), cfg.save_path)
-    upload_file_to_oss(cfg.save_path, cfg.save_path)
+    # upload_file_to_oss(cfg.save_path, cfg.save_path)
 
 if __name__ == "__main__":
     train_sft()

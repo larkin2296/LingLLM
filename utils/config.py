@@ -1,7 +1,7 @@
 class Config:
     # 训练集地址
     train_bin = "./data/train/pre_train_token_ids.bin"
-    sft_train = "./data/val/distill_r1_110k_sft.jsonl"
+    sft_train = "./data/val/sft_data.filtered_copy.jsonl"
     batch_size = 2
     # 最大序列长度
     max_seq_len = 512

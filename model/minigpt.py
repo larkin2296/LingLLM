@@ -31,6 +31,12 @@ class MiniTransformerBlock(nn.Module):
         # x形状：[batch, seq_len, embed_dim]
         x_norm = self.norm1(x)
         attn_out, _ = self.attn(x_norm, x_norm, x_norm,attn_mask=attn_mask, key_padding_mask=key_padding_mask)    # padding mask (标记pad位置))
+        # print(f"attn_weights: shape={attn_weights.shape} min={attn_weights.min().item():.4f} max={attn_weights.max().item():.4f} mean={attn_weights.mean().item():.4f}")
+        # zero_count = (attn_weights == 0).sum().item()
+        # nan_count = torch.isnan(attn_weights).sum().item()
+        # inf_count = torch.isinf(attn_weights).sum().item()
+        # all_zero_rows = ((attn_weights == 0).sum(dim=-1) == attn_weights.size(-1)).sum().item()
+        # print(f"zero={zero_count} nan={nan_count} inf={inf_count} all_zero_rows={all_zero_rows}")
         x = x + self.dropout(attn_out)
         # ...同理FFN...
         x_norm2 = self.norm2(x)
@@ -66,6 +72,13 @@ class MiniLLM(nn.Module):
         # 返回一个一维张量，包含从 start 到 end 的数字，步长为 step。
         positions = torch.arange(seq_len, device=device).unsqueeze(0).expand(batch, -1)
         x = self.embedding(input_ids) + self.pos_embedding(positions)
+        # print("embedding输出max:", x.max().item())
+        # print("embedding输出min:", x.min().item())
+        # print("embedding输出nan数:", torch.isnan(x).sum().item())
+        # print("embedding输出inf数:", torch.isinf(x).sum().item())
+
+        if torch.isnan(x).any() or torch.isinf(x).any():
+            print("embedding输出异常，检查embedding权重、token id合法性！")
         
         # causal mask：[seq, seq]
         causal_mask = torch.triu(torch.ones(seq_len, seq_len, device=device), diagonal=1)
