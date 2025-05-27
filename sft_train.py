@@ -42,11 +42,14 @@ def load_checkpoint(model, optimizer, filepath):
 
 def calc_accuracy(pred_logits, targets):
     preds = pred_logits.argmax(dim=-1)
-    mask = targets != PAD_TOKEN_ID
+    mask = targets != -100
     valid_count = mask.sum().item()
     if valid_count == 0:
         return 0.0
     correct = (preds == targets) & mask
+    # print("targets中-100数量：", (targets == -100).sum().item())
+    # print("targets中pad数量：", (targets == PAD_TOKEN_ID).sum().item())
+    # print("有效label数量：", (targets != -100).sum().item())
     return correct.sum().item() / valid_count
 
 def save_checkpoint(model, optimizer, epoch, filepath):
@@ -75,7 +78,8 @@ def train_sft():
             model.load_state_dict(state)
         print("SFT参数已加载，optimizer和epoch将从头初始化")
     else:
-        download_file_from_oss(cfg.pre_save_path, cfg.pre_save_path)
+        if not os.path.exists(cfg.pre_save_path):
+            download_file_from_oss(cfg.pre_save_path, cfg.pre_save_path)
         state = torch.load(cfg.pre_save_path, map_location=device)
         if "model_state_dict" in state:
             model.load_state_dict(state["model_state_dict"])
@@ -84,6 +88,7 @@ def train_sft():
         print("SFT无权重，从头训练")
 
     for epoch in range(start_epoch, cfg.epochs):
+        epoch_start_time = time.time()  # 记录epoch开始时间
         model.train()
         total_loss = 0
         total_acc = 0
@@ -106,10 +111,15 @@ def train_sft():
         total_loss /= count
         total_acc /= count
         scheduler.step(total_loss)
+        epoch_seconds = time.time() - epoch_start_time
+        if last_loss is not None:
+            delta_loss = abs(last_loss - total_loss)
+            print(f"SFT Epoch {epoch}: Loss {total_loss:.4f} Acc {total_acc:.4f}| Time: {epoch_seconds:.2f}S| Loss下降: {delta_loss:.6f}")
+        else:
+            print(f"SFT Epoch {epoch}: Loss {total_loss:.4f} Acc {total_acc:.4f}| Time: {epoch_seconds:.2f}S")
         save_checkpoint(model, optimizer, epoch, cfg.sft_checkpoint_path)
         with open(cfg.sft_log_file, "a", encoding="utf-8") as f:
             f.write(f"{epoch},{total_loss},{total_acc}\n")
-        print(f"SFT Epoch {epoch}: Loss {total_loss:.4f} Acc {total_acc:.4f}")
         last_loss = total_loss
     print(f"SFT训练结束，权重已保存到 {cfg.save_path}")
     torch.save(model.state_dict(), cfg.save_path)
