@@ -86,41 +86,51 @@ def train_sft():
             model.load_state_dict(state)
         print("SFT无权重，从头训练")
 
-    for epoch in range(start_epoch, cfg.epochs):
-        epoch_start_time = time.time()  # 记录epoch开始时间
-        model.train()
-        total_loss = 0
-        total_acc = 0
-        count = 0
-        optimizer.zero_grad()
-        for step, (x, y) in enumerate(sft_loader):
-            x = x.to(device)
-            y = y.to(device)
-            attention_mask = (x != PAD_TOKEN_ID)
-            logits = model(x, attention_mask=attention_mask)
-            loss = loss_fn(logits.view(-1, VOCAB_SIZE), y.view(-1))
-            loss.backward()
-            optimizer.step()
+    try:
+        for epoch in range(start_epoch, cfg.epochs):
+            epoch_start_time = time.time()  # 记录epoch开始时间
+            model.train()
+            total_loss = 0
+            total_acc = 0
+            count = 0
             optimizer.zero_grad()
-            total_loss += loss.item()
-            total_acc += calc_accuracy(logits.view(-1, VOCAB_SIZE), y.view(-1))
-            count += 1
-        total_loss /= count
-        total_acc /= count
-        scheduler.step(total_loss)
-        epoch_seconds = time.time() - epoch_start_time
-        if last_loss is not None:
-            delta_loss = abs(last_loss - total_loss)
-            print(f"SFT Epoch {epoch}: Loss {total_loss:.4f} Acc {total_acc:.4f}| Time: {epoch_seconds:.2f}S| Loss下降: {delta_loss:.6f}")
-        else:
-            print(f"SFT Epoch {epoch}: Loss {total_loss:.4f} Acc {total_acc:.4f}| Time: {epoch_seconds:.2f}S")
-        save_checkpoint(model, optimizer, epoch, cfg.sft_checkpoint_path)
-        with open(cfg.sft_log_file, "a", encoding="utf-8") as f:
-            f.write(f"{epoch},{total_loss},{total_acc}\n")
-        last_loss = total_loss
-    print(f"SFT训练结束，权重已保存到 {cfg.save_path}")
-    torch.save(model.state_dict(), cfg.save_path)
+            for step, (x, y) in enumerate(sft_loader):
+                x = x.to(device)
+                y = y.to(device)
+                attention_mask = (x != PAD_TOKEN_ID)
+                logits = model(x, attention_mask=attention_mask)
+                loss = loss_fn(logits.view(-1, VOCAB_SIZE), y.view(-1))
+                loss.backward()
+                optimizer.step()
+                optimizer.zero_grad()
+                total_loss += loss.item()
+                total_acc += calc_accuracy(logits.view(-1, VOCAB_SIZE), y.view(-1))
+                count += 1
+            total_loss /= count
+            total_acc /= count
+            scheduler.step(total_loss)
+            epoch_seconds = time.time() - epoch_start_time
+            if last_loss is not None:
+                delta_loss = abs(last_loss - total_loss)
+                print(f"SFT Epoch {epoch}: Loss {total_loss:.4f} Acc {total_acc:.4f}| Time: {epoch_seconds:.2f}S| Loss下降: {delta_loss:.6f}")
+            else:
+                print(f"SFT Epoch {epoch}: Loss {total_loss:.4f} Acc {total_acc:.4f}| Time: {epoch_seconds:.2f}S")
+            save_checkpoint(model, optimizer, epoch, cfg.sft_checkpoint_path)
+            with open(cfg.sft_log_file, "a", encoding="utf-8") as f:
+                f.write(f"{epoch},{total_loss},{total_acc}\n")
+            last_loss = total_loss
+        print(f"SFT训练结束，权重已保存到 {cfg.save_path}")
+        torch.save(model.state_dict(), cfg.save_path)
     # upload_file_to_oss(cfg.save_path, cfg.save_path)
+    except KeyboardInterrupt:
+        print("\n收到中断信号，优雅退出训练...")
+
+    finally:
+        # 释放显存，清理资源
+        if torch.cuda.is_available():
+            print("清理CUDA显存...")
+            torch.cuda.empty_cache()
+        print("训练进程已安全退出！")
 
 if __name__ == "__main__":
     train_sft()
