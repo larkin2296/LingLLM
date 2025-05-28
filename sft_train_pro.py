@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader, SubsetRandomSampler
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from model.minigpt import MiniLLM
-from tokenizer import VOCAB_SIZE, PAD_TOKEN_ID, tokenizer
+from tokenizer import VOCAB_SIZE, PAD_TOKEN_ID, encode, tokenizer
 from utils.sft_dataset import SFTJsonlDataset
 from utils.config import Config
 from utils.oss_upload import upload_file_to_oss, download_file_from_oss
@@ -43,7 +43,7 @@ def load_checkpoint(model, optimizer, filepath):
 
 def topk_generate(model, tokenizer, prompt, k=5, max_new_tokens=64):
     model.eval()
-    input_ids = tokenizer.encode(make_prompt(prompt), max_length=cfg.max_seq_len, truncation=True)
+    input_ids = encode(make_prompt(prompt), max_length=cfg.max_seq_len)
     generated = input_ids.copy()
     for _ in range(max_new_tokens):
         input_tensor = torch.tensor([generated[-cfg.max_seq_len:]], dtype=torch.long).to(cfg.device)
