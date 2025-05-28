@@ -104,7 +104,7 @@ def train():
     # 设定你的目标
     TARGET_LOSS = 0.05    # 你希望train_loss小于0.05就停止
     TARGET_ACC = 0.95     # 你希望train_acc大于0.95就停止
-    MIN_LOSS_DECREASE = 0.003  # 新增：最小下降幅度
+    MIN_LOSS_DECREASE = 0.1  # 新增：最小下降幅度
     accum_steps = 16  # 梯度累积步数
     last_loss = None
     start_epoch = 0

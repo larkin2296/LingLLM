@@ -85,7 +85,10 @@ class MiniLLM(nn.Module):
         causal_mask = causal_mask.masked_fill(causal_mask == 1, float('-inf'))
         
         # attention_mask: [batch, seq]，padding位置是0
-        key_padding_mask = torch.where(attention_mask == 0, torch.full_like(attention_mask, float('-inf'), dtype=torch.float), torch.zeros_like(attention_mask, dtype=torch.float))
+        if attention_mask is not None:
+            key_padding_mask = torch.where(attention_mask == 0, torch.full_like(attention_mask, float('-inf'), dtype=torch.float), torch.zeros_like(attention_mask, dtype=torch.float))
+        else:
+            key_padding_mask = None
         for block in self.blocks:
             x = block(x, attn_mask=causal_mask, key_padding_mask=key_padding_mask)
         logits = self.fc_out(x)
