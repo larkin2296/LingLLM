@@ -3,13 +3,14 @@ import torch.nn as nn
 import os
 from model.minigpt import MiniLLM
 from tokenizer import VOCAB_SIZE, PAD_TOKEN_ID, tokenizer
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, SubsetRandomSampler
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from utils.sft_dataset import SFTJsonlDataset
 from utils.config import Config
 from utils.oss_upload import upload_file_to_oss, download_file_from_oss
-import platform
+from torch.cuda.amp import autocast, GradScaler
 import time
+import numpy as np
 
 cfg = Config()
 
@@ -18,9 +19,14 @@ if torch.cuda.is_available():
 else:
     device = torch.device("cpu")
 
+scaler = GradScaler()
+
 sft_dataset = SFTJsonlDataset(cfg.sft_train, tokenizer, seq_len=cfg.max_seq_len)
+num_samples = len(sft_dataset)
+sampled_indices = np.random.choice(num_samples, 10000, replace=False)
+sampler = SubsetRandomSampler(sampled_indices)
 sft_loader = DataLoader(
-    sft_dataset, batch_size=cfg.batch_size, shuffle=True, num_workers=2, drop_last=False
+    sft_dataset, batch_size=cfg.batch_size, sampler=sampler, num_workers=2, drop_last=False
 )
 
 model = MiniLLM(
@@ -93,16 +99,17 @@ def train_sft():
             total_loss = 0
             total_acc = 0
             count = 0
-            optimizer.zero_grad()
             for step, (x, y) in enumerate(sft_loader):
                 x = x.to(device)
                 y = y.to(device)
-                attention_mask = (x != PAD_TOKEN_ID)
-                logits = model(x, attention_mask=attention_mask)
-                loss = loss_fn(logits.view(-1, VOCAB_SIZE), y.view(-1))
-                loss.backward()
-                optimizer.step()
                 optimizer.zero_grad()
+                with autocast():  # 自动切到float16
+                    attention_mask = (x != PAD_TOKEN_ID)
+                    logits = model(x, attention_mask=attention_mask)
+                    loss = loss_fn(logits.view(-1, VOCAB_SIZE), y.view(-1))
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
                 total_loss += loss.item()
                 total_acc += calc_accuracy(logits.view(-1, VOCAB_SIZE), y.view(-1))
                 count += 1
