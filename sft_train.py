@@ -8,7 +8,6 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from utils.sft_dataset import SFTJsonlDataset
 from utils.config import Config
 from utils.oss_upload import upload_file_to_oss, download_file_from_oss
-from torch.cuda.amp import autocast, GradScaler
 import time
 import numpy as np
 
@@ -18,8 +17,6 @@ if torch.cuda.is_available():
     device = torch.device("cuda:0")
 else:
     device = torch.device("cpu")
-
-scaler = GradScaler()
 
 sft_dataset = SFTJsonlDataset(cfg.sft_train, tokenizer, seq_len=cfg.max_seq_len)
 num_samples = len(sft_dataset)
@@ -103,13 +100,12 @@ def train_sft():
                 x = x.to(device)
                 y = y.to(device)
                 optimizer.zero_grad()
-                with autocast(device_type='cuda', dtype=torch.float16):  # 自动切到float16
+                with torch.autocast(device_type='cuda', dtype=torch.float16):  # 自动切到float16
                     attention_mask = (x != PAD_TOKEN_ID)
                     logits = model(x, attention_mask=attention_mask)
                     loss = loss_fn(logits.view(-1, VOCAB_SIZE), y.view(-1))
-                scaler.scale(loss).backward()
-                scaler.step(optimizer)
-                scaler.update()
+                loss.backward()
+                optimizer.step()
                 total_loss += loss.item()
                 total_acc += calc_accuracy(logits.view(-1, VOCAB_SIZE), y.view(-1))
                 count += 1
