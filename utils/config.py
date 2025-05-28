@@ -24,4 +24,6 @@ class Config:
     save_path = "weights/sft_minigpt_best.pth"
     sft_log_file = "logs/sft_train_log.csv"
     sft_checkpoint_path = "weights/sft_checkpoint.pth"
+    # eval评估配置
+    sft_eval = "./data/test/eval_data.jsonl"
     learning_rate = 1e-4
