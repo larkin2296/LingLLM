@@ -15,7 +15,8 @@ from utils.oss_upload import upload_file_to_oss, download_file_from_oss
 cfg = Config()
 
 def make_prompt(user_input):
-    return f"Instruction: {user_input}\nOutput:"
+    return user_input
+    # return f"Instruction: {user_input}\nOutput:"
 
 def calc_accuracy(pred_logits, targets):
     preds = pred_logits.argmax(dim=-1)

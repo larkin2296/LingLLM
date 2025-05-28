@@ -12,11 +12,10 @@ class SFTJsonlDataset(Dataset):
         with open(jsonl_file, 'r', encoding='utf-8') as f:
             for line in f:
                 j = json.loads(line)
-                instruction = j.get("instruction", "")
-                output = j.get("output", "")
+                prompt = j.get("question", "")
+                output = j.get("answer", "")
                 # 这里可根据你的prompt模板格式调整 ↓↓↓
                 # 例：Alpaca
-                prompt = f"Instruction: {instruction}\nOutput:"
                 prompt_token_ids = tokenizer.encode(prompt)
                 output_token_ids = tokenizer.encode(output)
                 if len(prompt_token_ids) < half_seq_len:
@@ -36,6 +35,7 @@ class SFTJsonlDataset(Dataset):
                         input_ids += [PAD_TOKEN_ID] * (seq_len - len(input_ids))
                         labels += [-100] * (seq_len - len(labels))
                 self.samples.append((input_ids, labels))
+                print(f"len(prompt_token_ids): {len(prompt_token_ids)}, len(output_token_ids): {len(output_token_ids)}, output tokens (不为-100) count: {sum(x != -100 for x in labels)}")
                 
     def __len__(self):
         return len(self.samples)
