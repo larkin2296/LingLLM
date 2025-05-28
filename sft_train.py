@@ -19,7 +19,7 @@ if torch.cuda.is_available():
 else:
     device = torch.device("cpu")
 
-scaler = GradScaler()
+scaler = GradScaler(device_type='cuda')
 
 sft_dataset = SFTJsonlDataset(cfg.sft_train, tokenizer, seq_len=cfg.max_seq_len)
 num_samples = len(sft_dataset)
