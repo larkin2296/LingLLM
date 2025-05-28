@@ -116,8 +116,8 @@ def train_sft():
     eval_interval = cfg.eval_interval if hasattr(cfg, "eval_interval") else 2
     sample_interval = cfg.sample_interval if hasattr(cfg, "sample_interval") else 2
     prompts = getattr(cfg, "sample_prompts", [
-        "请解释高分子材料的回收与再利用的具体过程",
-        "你好", "帮我写个古诗"
+        "你爱阅读吗？",
+        "你有什么兴趣爱好？", "上海的别称是什么？"
     ])
 
     last_loss = None

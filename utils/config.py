@@ -2,7 +2,7 @@ class Config:
     # 训练集地址
     train_bin = "./data/train/pre_train_token_ids.bin"
     sft_train = "./data/val/chat_sft_train.jsonl"
-    batch_size = 2
+    batch_size = 4
     # 最大序列长度
     max_seq_len = 512
     # 它能在训练时随机“丢弃”一部分神经元（设为0），防止模型对训练数据“死记硬背”而失去泛化能力。
@@ -14,7 +14,7 @@ class Config:
     # Transformer Block的层数
     num_layers = 16
     # 训练轮数
-    epochs = 200
+    epochs = 5
     # 模型保存路径
     # 预训练文件配置
     pre_save_path = "weights/minigpt_best.pth"
@@ -26,4 +26,4 @@ class Config:
     sft_checkpoint_path = "weights/sft_checkpoint.pth"
     # eval评估配置
     sft_eval = "./data/test/eval_data.jsonl"
-    learning_rate = 1e-4
+    learning_rate = 1e-5

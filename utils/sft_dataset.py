@@ -35,7 +35,7 @@ class SFTJsonlDataset(Dataset):
                         input_ids += [PAD_TOKEN_ID] * (seq_len - len(input_ids))
                         labels += [-100] * (seq_len - len(labels))
                 self.samples.append((input_ids, labels))
-                print(f"len(prompt_token_ids): {len(prompt_token_ids)}, len(output_token_ids): {len(output_token_ids)}, output tokens (不为-100) count: {sum(x != -100 for x in labels)}")
+                # print(f"len(prompt_token_ids): {len(prompt_token_ids)}, len(output_token_ids): {len(output_token_ids)}, output tokens (不为-100) count: {sum(x != -100 for x in labels)}")
                 
     def __len__(self):
         return len(self.samples)
