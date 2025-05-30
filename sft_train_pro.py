@@ -6,7 +6,7 @@ import numpy as np
 from torch.utils.data import DataLoader, SubsetRandomSampler
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
-from model.minigpt import MiniLLM
+from model.minigpt2 import TransformerLM
 from tokenizer import VOCAB_SIZE, PAD_TOKEN_ID, encode, tokenizer
 from utils.sft_dataset import SFTJsonlDataset
 from utils.config import Config
@@ -28,7 +28,7 @@ def calc_accuracy(pred_logits, targets):
     return correct.sum().item() / valid_count
 
 def save_checkpoint(model, optimizer, epoch, filepath):
-    torch.save({
+    torch.save({ 
         'epoch': epoch,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
@@ -98,9 +98,14 @@ def train_sft():
     eval_dataset = SFTJsonlDataset(cfg.sft_eval, tokenizer, seq_len=cfg.max_seq_len)
     eval_loader = DataLoader(eval_dataset, batch_size=cfg.batch_size, shuffle=False, num_workers=2, drop_last=False)
 
-    model = MiniLLM(
-        VOCAB_SIZE, cfg.embed_dim, cfg.max_seq_len,
-        cfg.num_heads, num_layers=cfg.num_layers, dropout=cfg.dropout
+    model = TransformerLM(
+        vocab_size=VOCAB_SIZE,
+        d_model=cfg.embed_dim,
+        n_heads=cfg.num_heads,
+        num_layers=cfg.num_layers,
+        d_ff=cfg.embed_dim*4,
+        max_len=cfg.max_seq_len,
+        dropout=cfg.dropout
     ).to(device)
 
     loss_fn = nn.CrossEntropyLoss(ignore_index=-100)

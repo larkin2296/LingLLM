@@ -1,12 +1,16 @@
 import sentencepiece as spm
 
 spm.SentencePieceTrainer.train(
-    input='./data/train/spm_sampled.txt',           # 输入文件路径
-    model_prefix='spm_bpe',       # 输出文件前缀，生成spm_bpe.model和spm_bpe.vocab
-    vocab_size=32000,              # 词汇量（可根据需求调整）
-    model_type='bpe',             # 使用BPE算法
-    character_coverage=0.9995,    # 覆盖中文常用字符
-    user_defined_symbols=['[PAD]', '[UNK]', '[CLS]', '[SEP]', '[MASK]']  # 特殊符号
+    input='./data/train/spm_sampled.txt',
+    model_prefix='spm_bpe',
+    vocab_size=32000,
+    model_type='bpe',
+    character_coverage=0.9995,
+    pad_id=0,        # 让0号token是真正pad
+    unk_id=1,
+    bos_id=2,
+    eos_id=3,
+    user_defined_symbols=['[CLS]', '[SEP]', '[MASK]']
 )
 
 print("训练完成，生成spm_bpe.model和spm_bpe.vocab。")

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import os
-from model.minigpt import MiniLLM
+from model.minigpt2 import TransformerLM
 from tokenizer import VOCAB_SIZE, PAD_TOKEN_ID
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
@@ -36,17 +36,21 @@ else:
 vocab_size = VOCAB_SIZE
 embed_dim = cfg.embed_dim
 num_heads = cfg.num_heads
-
-model = MiniLLM(
-    vocab_size, embed_dim, max_seq_len,
-    num_heads, num_layers=cfg.num_layers, dropout=cfg.dropout
+model = TransformerLM(
+    vocab_size=VOCAB_SIZE,
+    d_model=cfg.embed_dim,
+    n_heads=cfg.num_heads,
+    num_layers=cfg.num_layers,
+    d_ff=cfg.embed_dim * 4,
+    max_len=cfg.max_seq_len,
+    dropout=cfg.dropout
 ).to(device)
 
 # total_params = sum(p.numel() for p in model.parameters())
 # print("模型总参数量:", total_params)
 
-loss_fn = nn.CrossEntropyLoss(ignore_index=PAD_TOKEN_ID)
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-5)
+loss_fn = nn.CrossEntropyLoss(ignore_index=0)
+optimizer = torch.optim.Adam(model.parameters(), lr=5e-5, weight_decay=1e-5)
 scheduler = ReduceLROnPlateau(optimizer, 'min', patience=3, factor=0.5)
 # optimizer = torch.optim.Adam(model.parameters(), lr=cfg.learning_rate, weight_decay=1e-5)
 
@@ -137,9 +141,12 @@ def train():
         for step, (x, y) in enumerate(train_loader):
             x = x.to(device)
             y = y.to(device)
-            logits = model(x)
-            loss = loss_fn(logits.view(-1, vocab_size), y.view(-1))
-            loss = loss / accum_steps  # 累积步数归一化
+            # print(x[0])
+            # print(y[0])
+            with torch.autocast(device_type='cuda', dtype=torch.float16):
+                    logits = model(x, None)
+                    loss = loss_fn(logits.view(-1, VOCAB_SIZE), y.view(-1))
+                    loss = loss / accum_steps  # 累积步数归一化
             loss.backward()
             
             # 累积到指定步数才进行optimizer.step

@@ -14,7 +14,7 @@ class Config:
     # Transformer Block的层数
     num_layers = 16
     # 训练轮数
-    epochs = 5
+    epochs = 200
     # 模型保存路径
     # 预训练文件配置
     pre_save_path = "weights/minigpt_best.pth"
@@ -26,4 +26,4 @@ class Config:
     sft_checkpoint_path = "weights/sft_checkpoint.pth"
     # eval评估配置
     sft_eval = "./data/test/eval_data.jsonl"
-    learning_rate = 1e-5
+    learning_rate = 5e-5

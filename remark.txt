@@ -1,1 +1,3 @@
 https://github.com/mobvoi/seq-monkey-data/blob/main/docs/pretrain_open_corpus.md
+
+https://zhuanlan.zhihu.com/p/420820453

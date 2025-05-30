@@ -9,26 +9,27 @@ cfg = Config()
 
 def make_prompt(user_input):
     # 和SFT训练一致
-    return f"Instruction: {user_input}\nOutput:"
+    # return f"Instruction: {user_input}\nOutput:"
+    return user_input
 
 # === 2. 新建模型并加载训练权重 ===
 model = MiniLLM(VOCAB_SIZE, cfg.embed_dim,cfg.max_seq_len, cfg.num_heads, cfg.num_layers)
-# if not os.path.exists(cfg.save_path):
-#             download_file_from_oss(cfg.save_path, cfg.save_path)
-#             state = torch.load(cfg.save_path, map_location="cpu")
-#             model.load_state_dict(state)
-#             model.eval()
+if not os.path.exists(cfg.save_path):
+    download_file_from_oss(cfg.save_path, cfg.save_path)
+state = torch.load(cfg.save_path, map_location="cpu")
+model.load_state_dict(state)
+model.eval()
 # elif not os.path.exists(cfg.pre_save_path):
 #             download_file_from_oss(cfg.pre_save_path, cfg.pre_save_path)
 #             state = torch.load(cfg.pre_save_path, map_location="cpu")
 #             model.load_state_dict(state)
 #             model.eval()
-state = torch.load(cfg.sft_checkpoint_path, map_location="cpu")
-if "model_state_dict" in state:
-    model.load_state_dict(state["model_state_dict"])
-else:
-    model.load_state_dict(state)
-model.eval()
+# state = torch.load(cfg.sft_checkpoint_path, map_location="cpu")
+# if "model_state_dict" in state:
+#     model.load_state_dict(state["model_state_dict"])
+# else:
+#     model.load_state_dict(state)
+# model.eval()
 
 # === 3. 对话循环 ===
 while True:
