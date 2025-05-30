@@ -4,7 +4,7 @@ class Config:
     sft_train = "./data/val/chat_sft_train.jsonl"
     batch_size = 4
     # 最大序列长度
-    max_seq_len = 512
+    max_seq_len = 256
     # 它能在训练时随机“丢弃”一部分神经元（设为0），防止模型对训练数据“死记硬背”而失去泛化能力。
     dropout = 0.2
     # 模型维度

@@ -136,31 +136,48 @@ def train():
         total_train_loss = 0
         total_train_acc = 0
         count = 0  # 用于统计真实batch数
+        accum_loss = 0
+        accum_acc = 0
 
-        optimizer.zero_grad()  # 梯度清零放到外面
         for step, (x, y) in enumerate(train_loader):
             x = x.to(device)
             y = y.to(device)
+            # print("x[0]:", x[0][:30].tolist())
+            # print("y[0]:", y[0][:30].tolist())
+            # print("x[0][:-1] == y[0][1:]:", (x[0][1:] == y[0][:-1]).all())
             # print(x[0])
             # print(y[0])
             with torch.autocast(device_type='cuda', dtype=torch.float16):
                     logits = model(x, None)
+                    # print("logits shape:", logits.shape)
+                    # print("y shape:", y.shape)
                     loss = loss_fn(logits.view(-1, VOCAB_SIZE), y.view(-1))
                     loss = loss / accum_steps  # 累积步数归一化
             loss.backward()
+            # print(loss.item())
+            accum_loss += loss.item()
+            print(calc_accuracy(logits.view(-1, VOCAB_SIZE), y.view(-1)))
+            accum_acc += calc_accuracy(logits.view(-1, VOCAB_SIZE), y.view(-1))
             
             # 累积到指定步数才进行optimizer.step
             if (step + 1) % accum_steps == 0 or (step + 1) == len(train_loader):
                 optimizer.step()
                 optimizer.zero_grad()
-
-            # 累计loss/acc，注意只统计一次，不用除以accum_steps
-            total_train_loss += loss.item() * accum_steps  # 还原为正常loss
-            total_train_acc += calc_accuracy(logits.view(-1, vocab_size), y.view(-1))
+                total_train_loss += accum_loss
+                total_train_acc += accum_acc
+                accum_loss = 0
+                accum_acc = 0
             count += 1
+            print(count)
+            print(total_train_acc)
 
+            # if torch.isnan(loss) or torch.isinf(loss):
+            #     print("loss is nan or inf at step", step)
+            #     exit()
+            # print(f"Step {step} loss: {loss.item()}")
         total_train_loss /= count
         total_train_acc /= count
+        print(total_train_acc)
 
         scheduler.step(total_train_loss)
 
